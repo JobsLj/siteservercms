@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Web.UI;
-using BaiRong.Core;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Core.Security;
-using SiteServer.CMS.Plugin;
 
 namespace SiteServer.BackgroundPages
 {
@@ -16,9 +16,13 @@ namespace SiteServer.BackgroundPages
 
         protected virtual bool IsSinglePage => false; // 是否为单页（即是否需要放在框架页内运行,false表示需要）
 
+        public string IsNightly => WebConfigUtils.IsNightlyUpdate.ToString().ToLower(); // 系统是否允许升级到最新的开发版本
+
+        public string Version => SystemManager.PluginVersion; // 系统采用的插件API版本号
+
         protected bool IsForbidden { get; private set; }
 
-        public RequestContext Body { get; private set; }
+        public Request Body { get; private set; }
 
         private void SetMessage(MessageUtils.Message.EMessageType messageType, Exception ex, string message)
         {
@@ -30,7 +34,7 @@ namespace SiteServer.BackgroundPages
         {
             base.OnInit(e);
 
-            Body = new RequestContext();
+            Body = new Request();
 
             if (!IsAccessable && !Body.IsAdminLoggin) // 如果页面不能直接访问且又没有登录则直接跳登录页
             {
@@ -64,7 +68,7 @@ if (window.top.location.href.toLowerCase().indexOf(""main.aspx"") == -1){{
 
             if (!string.IsNullOrEmpty(_scripts))
             {
-                writer.Write(@"<script type=""text/javascript"">{0}</script>", _scripts);
+                writer.Write($@"<script type=""text/javascript"">{_scripts}</script>");
             }
         }
 
@@ -79,7 +83,15 @@ if (window.top.location.href.toLowerCase().indexOf(""main.aspx"") == -1){{
 setTimeout(function() {{
     location.href = '{redirectUrl}';
 }}, 1500);
-$('.operation-area').hide();
+";
+        }
+
+        public void AddWaitAndReloadMainPage()
+        {
+            _scripts += @"
+setTimeout(function() {{
+    window.top.location.reload();
+}}, 1500);
 ";
         }
 
@@ -89,7 +101,6 @@ $('.operation-area').hide();
 setTimeout(function() {{
     {scripts}
 }}, 1500);
-$('.operation-area').hide();
 ";
         }
 
@@ -214,40 +225,15 @@ $('.operation-area').hide();
             return ClientScript.IsStartupScriptRegistered(key);
         }
 
-        public static string GetShowImageScript(string imageClientId, string publishmentSystemUrl)
+        public static string GetShowImageScript(string imageClientId, string siteUrl)
         {
-            return GetShowImageScript("this", imageClientId, publishmentSystemUrl);
+            return GetShowImageScript("this", imageClientId, siteUrl);
         }
 
-        public static string GetShowImageScript(string objString, string imageClientId, string publishmentSystemUrl)
+        public static string GetShowImageScript(string objString, string imageClientId, string siteUrl)
         {
             return
-                $"showImage({objString}, '{imageClientId}', '{PageUtils.ApplicationPath}', '{publishmentSystemUrl}')";
-        }
-
-        public string SwalError(string title, string message)
-        {
-            var script = $@"swal({{
-  title: '{title}',
-  text: '{StringUtils.ReplaceNewline(message, string.Empty)}',
-  icon: 'error',
-  button: '关 闭',
-}});";
-            ClientScript.RegisterClientScriptBlock(GetType(), nameof(SwalError), script, true);
-
-            return script;
-        }
-
-        public string SwalDom(string title, string elementId)
-        {
-            var script = $@"swal({{
-  title: '{title}',
-  content: $('#{elementId}')[0],
-  button: '关 闭',
-}});";
-            ClientScript.RegisterClientScriptBlock(GetType(), nameof(SwalDom), script, true);
-
-            return script;
+                $"showImage({objString}, '{imageClientId}', '{PageUtils.ApplicationPath}', '{siteUrl}')";
         }
     }
 }

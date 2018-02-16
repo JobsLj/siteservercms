@@ -1,43 +1,44 @@
-﻿using System;
-using System.Text;
+﻿using System.Text;
 using System.Web.UI;
-using BaiRong.Core;
 using SiteServer.BackgroundPages.Core;
 using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Security;
 using SiteServer.CMS.Model;
 using SiteServer.CMS.Model.Enumerations;
-using SiteServer.CMS.Plugin;
+using SiteServer.Utils;
 
 namespace SiteServer.BackgroundPages.Controls
 {
     public class NodeTree : Control
     {
-        private PublishmentSystemInfo _publishmentSystemInfo;
-
         protected override void Render(HtmlTextWriter writer)
         {
             var builder = new StringBuilder();
 
-            var context = new RequestContext();
+            var request = new Request();
 
-            var publishmentSystemId = int.Parse(Page.Request.QueryString["PublishmentSystemID"]);
-            _publishmentSystemInfo = PublishmentSystemManager.GetPublishmentSystemInfo(publishmentSystemId);
-            var scripts = ChannelLoading.GetScript(_publishmentSystemInfo, ELoadingType.ContentTree, null);
-            builder.Append(scripts);
-            if (Page.Request.QueryString["PublishmentSystemID"] != null)
+            var siteId = TranslateUtils.ToInt(Page.Request.QueryString["siteId"]);
+            
+            if (siteId > 0)
             {
-                var nodeIdList = DataProvider.NodeDao.GetNodeIdListByParentId(_publishmentSystemInfo.PublishmentSystemId, 0);
-                foreach (var nodeId in nodeIdList)
+                var siteInfo = SiteManager.GetSiteInfo(siteId);
+                if (siteInfo != null)
                 {
-                    var nodeInfo = NodeManager.GetNodeInfo(_publishmentSystemInfo.PublishmentSystemId, nodeId);
-                    var enabled = AdminUtility.IsOwningNodeId(context.AdminName, nodeInfo.NodeId);
-                    if (!enabled)
-                    {
-                        if (!AdminUtility.IsHasChildOwningNodeId(context.AdminName, nodeInfo.NodeId)) continue;
-                    }
+                    var scripts = ChannelLoading.GetScript(siteInfo, ELoadingType.ContentTree, null);
+                    builder.Append(scripts);
 
-                    builder.Append(ChannelLoading.GetChannelRowHtml(_publishmentSystemInfo, nodeInfo, enabled, ELoadingType.ContentTree, null, context.AdminName));
+                    var channelIdList = DataProvider.ChannelDao.GetIdListByParentId(siteInfo.Id, 0);
+                    foreach (var channelId in channelIdList)
+                    {
+                        var channelInfo = ChannelManager.GetChannelInfo(siteInfo.Id, channelId);
+                        var enabled = AdminUtility.IsOwningChannelId(request.AdminName, channelInfo.Id);
+                        if (!enabled)
+                        {
+                            if (!AdminUtility.IsHasChildOwningChannelId(request.AdminName, channelInfo.Id)) continue;
+                        }
+
+                        builder.Append(ChannelLoading.GetChannelRowHtml(siteInfo, channelInfo, enabled, ELoadingType.ContentTree, null, request.AdminName));
+                    }
                 }
             }
             writer.Write(builder);

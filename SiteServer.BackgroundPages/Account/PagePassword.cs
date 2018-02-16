@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.CMS.Core;
 
 namespace SiteServer.BackgroundPages.Account
 {
@@ -20,14 +20,14 @@ namespace SiteServer.BackgroundPages.Account
             }
         }
 
-        public void Submit_Click(object sender, EventArgs e)
+        public override void Submit_OnClick(object sender, EventArgs e)
         {
             if (!Page.IsPostBack || !Page.IsValid) return;
 
-            if (BaiRongDataProvider.AdministratorDao.CheckPassword(TbCurrentPassword.Text, Body.AdministratorInfo.Password, Body.AdministratorInfo.PasswordFormat, Body.AdministratorInfo.PasswordSalt))
+            if (DataProvider.AdministratorDao.CheckPassword(TbCurrentPassword.Text, Body.AdministratorInfo.Password, Body.AdministratorInfo.PasswordFormat, Body.AdministratorInfo.PasswordSalt))
             {
                 string errorMessage;
-                if (BaiRongDataProvider.AdministratorDao.ChangePassword(Body.AdministratorInfo.UserName, TbNewPassword.Text, out errorMessage))
+                if (DataProvider.AdministratorDao.ChangePassword(Body.AdministratorInfo.UserName, TbNewPassword.Text, out errorMessage))
                 {
                     SuccessMessage("密码更改成功");
                 }

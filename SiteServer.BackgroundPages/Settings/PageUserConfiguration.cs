@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages.Settings
 {
@@ -10,9 +11,6 @@ namespace SiteServer.BackgroundPages.Settings
         public RadioButtonList RblIsRegisterAllowed;
         public TextBox TbRegisterPasswordMinLength;
         public DropDownList DdlRegisterPasswordRestriction;
-        public DropDownList DdlRegisterVerifyType;
-        public PlaceHolder PhRegisterSms;
-        public TextBox TbRegisterSmsTplId;
         public TextBox TbRegisterMinMinutesOfIpAddress;
 
         public RadioButtonList RblIsFailToLock;
@@ -31,7 +29,7 @@ namespace SiteServer.BackgroundPages.Settings
 
             if (IsPostBack) return;
 
-            VerifyAdministratorPermissions(AppManager.Permissions.Settings.User);
+            VerifyAdministratorPermissions(ConfigManager.Permissions.Settings.User);
 
             EBooleanUtils.AddListItems(RblIsRegisterAllowed);
 
@@ -40,12 +38,7 @@ namespace SiteServer.BackgroundPages.Settings
             EUserPasswordRestrictionUtils.AddListItems(DdlRegisterPasswordRestriction);
             ControlUtils.SelectSingleItemIgnoreCase(DdlRegisterPasswordRestriction, ConfigManager.SystemConfigInfo.UserPasswordRestriction);
 
-            EUserVerifyTypeUtils.AddListItems(DdlRegisterVerifyType);
-            PhRegisterSms.Visible = EUserVerifyTypeUtils.Equals(ConfigManager.SystemConfigInfo.UserRegistrationVerifyType, EUserVerifyType.Mobile);
-            TbRegisterSmsTplId.Text = ConfigManager.SystemConfigInfo.UserRegistrationSmsTplId;
-
             ControlUtils.SelectSingleItemIgnoreCase(RblIsRegisterAllowed, ConfigManager.SystemConfigInfo.IsUserRegistrationAllowed.ToString());
-            ControlUtils.SelectSingleItemIgnoreCase(DdlRegisterVerifyType, ConfigManager.SystemConfigInfo.UserRegistrationVerifyType);
 
             TbRegisterMinMinutesOfIpAddress.Text = ConfigManager.SystemConfigInfo.UserRegistrationMinMinutes.ToString();
 
@@ -70,11 +63,6 @@ namespace SiteServer.BackgroundPages.Settings
             TbFindPasswordSmsTplId.Text = ConfigManager.SystemConfigInfo.UserFindPasswordSmsTplId;
         }
 
-        public void DdlRegisterVerifyType_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            PhRegisterSms.Visible = EUserVerifyTypeUtils.Equals(DdlRegisterVerifyType.SelectedValue, EUserVerifyType.Mobile);
-        }
-
         public void RblIsFailToLock_SelectedIndexChanged(object sender, EventArgs e)
         {
             PhFailToLock.Visible = TranslateUtils.ToBool(RblIsFailToLock.SelectedValue);
@@ -97,8 +85,6 @@ namespace SiteServer.BackgroundPages.Settings
             ConfigManager.SystemConfigInfo.IsUserRegistrationAllowed = TranslateUtils.ToBool(RblIsRegisterAllowed.SelectedValue);
             ConfigManager.SystemConfigInfo.UserPasswordMinLength = TranslateUtils.ToInt(TbRegisterPasswordMinLength.Text);
             ConfigManager.SystemConfigInfo.UserPasswordRestriction = DdlRegisterPasswordRestriction.SelectedValue;
-            ConfigManager.SystemConfigInfo.UserRegistrationVerifyType = DdlRegisterVerifyType.SelectedValue;
-            ConfigManager.SystemConfigInfo.UserRegistrationSmsTplId = TbRegisterSmsTplId.Text;
             ConfigManager.SystemConfigInfo.UserRegistrationMinMinutes = TranslateUtils.ToInt(TbRegisterMinMinutesOfIpAddress.Text);
 
             ConfigManager.SystemConfigInfo.IsUserLockLogin = TranslateUtils.ToBool(RblIsFailToLock.SelectedValue);
@@ -108,7 +94,7 @@ namespace SiteServer.BackgroundPages.Settings
             ConfigManager.SystemConfigInfo.IsUserFindPassword = TranslateUtils.ToBool(RblIsFindPassword.SelectedValue);
             ConfigManager.SystemConfigInfo.UserFindPasswordSmsTplId = TbFindPasswordSmsTplId.Text;
 
-            BaiRongDataProvider.ConfigDao.Update(ConfigManager.Instance);
+            DataProvider.ConfigDao.Update(ConfigManager.Instance);
 
             Body.AddAdminLog("修改用户设置");
 

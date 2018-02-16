@@ -2,7 +2,7 @@
 using System.Collections.Specialized;
 using System.Text;
 using System.Xml;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
@@ -84,7 +84,7 @@ namespace SiteServer.CMS.StlParser.StlElement
 
         private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, string tabName, bool isHeader, string action, string classActive, string classNormal, int current)
         {
-            pageInfo.AddPageScriptsIfNotExists(PageInfo.Const.Jquery);
+            pageInfo.AddPageBodyCodeIfNotExists(PageInfo.Const.Jquery);
 
             var builder = new StringBuilder();
             var uniqueId = pageInfo.UniqueId;

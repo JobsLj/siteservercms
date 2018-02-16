@@ -1,5 +1,5 @@
 ﻿using System.Text;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Model;
 using System.Collections.Specialized;
 using SiteServer.BackgroundPages.Ajax;
@@ -8,7 +8,6 @@ using SiteServer.CMS.Core;
 using SiteServer.CMS.Core.Security;
 using SiteServer.CMS.Model.Enumerations;
 using SiteServer.CMS.Plugin;
-using SiteServer.Plugin.Features;
 
 namespace SiteServer.BackgroundPages.Core
 {
@@ -19,30 +18,33 @@ namespace SiteServer.BackgroundPages.Core
         private readonly string _iconMinusUrl;
         private readonly string _iconPlusUrl;
 
-        private readonly PublishmentSystemInfo _publishmentSystemInfo;
-        private readonly NodeInfo _nodeInfo;
+        private readonly SiteInfo _siteInfo;
+        private readonly ChannelInfo _channelInfo;
         private readonly bool _enabled;
         private readonly string _administratorName;
 
-        public static NodeTreeItem CreateInstance(PublishmentSystemInfo publishmentSystemInfo, NodeInfo nodeInfo, bool enabled, string administratorName)
+        public static NodeTreeItem CreateInstance(SiteInfo siteInfo, ChannelInfo channelInfo, bool enabled, string administratorName)
         {
-            return new NodeTreeItem(publishmentSystemInfo, nodeInfo, enabled, administratorName);
+            return new NodeTreeItem(siteInfo, channelInfo, enabled, administratorName);
         }
 
-        private NodeTreeItem(PublishmentSystemInfo publishmentSystemInfo, NodeInfo nodeInfo, bool enabled, string administratorName)
+        private NodeTreeItem(SiteInfo siteInfo, ChannelInfo channelInfo, bool enabled, string administratorName)
         {
-            _publishmentSystemInfo = publishmentSystemInfo;
-            _nodeInfo = nodeInfo;
+            _siteInfo = siteInfo;
+            _channelInfo = channelInfo;
             _enabled = enabled;
             _administratorName = administratorName;
 
             var treeDirectoryUrl = SiteServerAssets.GetIconUrl("tree");
 
             _iconFolderUrl = PageUtils.Combine(treeDirectoryUrl, "folder.gif");
-            var contentTable = PluginManager.GetEnabledPluginMetadata<IContentModel>(nodeInfo.ContentModelPluginId);
-            if (contentTable != null)
+            if (!string.IsNullOrEmpty(channelInfo.ContentModelPluginId))
             {
-                _iconFolderUrl = PageUtils.GetPluginDirectoryUrl(contentTable.Id, contentTable.Icon);
+                var iconUrl = PluginManager.GetPluginIconUrl(channelInfo.ContentModelPluginId);
+                if (!string.IsNullOrEmpty(iconUrl))
+                {
+                    _iconFolderUrl = iconUrl;
+                }
             }
 
             _iconEmptyUrl = PageUtils.Combine(treeDirectoryUrl, "empty.gif");
@@ -53,20 +55,20 @@ namespace SiteServer.BackgroundPages.Core
         public string GetItemHtml(ELoadingType loadingType, string returnUrl, NameValueCollection additional)
         {
             var htmlBuilder = new StringBuilder();
-            var parentsCount = _nodeInfo.ParentsCount;
+            var parentsCount = _channelInfo.ParentsCount;
             for (var i = 0; i < parentsCount; i++)
             {
                 htmlBuilder.Append($@"<img align=""absmiddle"" src=""{_iconEmptyUrl}"" />");
             }
 
-            if (_nodeInfo.ChildrenCount > 0)
+            if (_channelInfo.ChildrenCount > 0)
             {
                 htmlBuilder.Append(
-                    _nodeInfo.PublishmentSystemId == _nodeInfo.NodeId
-                        ? $@"<img align=""absmiddle"" style=""cursor:pointer"" onClick=""displayChildren(this);"" isAjax=""false"" isOpen=""true"" id=""{_nodeInfo
-                            .NodeId}"" src=""{_iconMinusUrl}"" />"
-                        : $@"<img align=""absmiddle"" style=""cursor:pointer"" onClick=""displayChildren(this);"" isAjax=""true"" isOpen=""false"" id=""{_nodeInfo
-                            .NodeId}"" src=""{_iconPlusUrl}"" />");
+                    _channelInfo.SiteId == _channelInfo.Id
+                        ? $@"<img align=""absmiddle"" style=""cursor:pointer"" onClick=""displayChildren(this);"" isAjax=""false"" isOpen=""true"" id=""{_channelInfo
+                            .Id}"" src=""{_iconMinusUrl}"" />"
+                        : $@"<img align=""absmiddle"" style=""cursor:pointer"" onClick=""displayChildren(this);"" isAjax=""true"" isOpen=""false"" id=""{_channelInfo
+                            .Id}"" src=""{_iconPlusUrl}"" />");
             }
             else
             {
@@ -76,8 +78,8 @@ namespace SiteServer.BackgroundPages.Core
             if (!string.IsNullOrEmpty(_iconFolderUrl))
             {
                 htmlBuilder.Append(
-                    _nodeInfo.NodeId > 0
-                        ? $@"<a href=""{PageRedirect.GetRedirectUrlToChannel(_nodeInfo.PublishmentSystemId, _nodeInfo.NodeId)}"" target=""_blank"" title=""浏览页面""><img align=""absmiddle"" border=""0"" src=""{_iconFolderUrl}"" style=""max-height: 22px; max-width: 22px"" /></a>"
+                    _channelInfo.Id > 0
+                        ? $@"<a href=""{PageRedirect.GetRedirectUrlToChannel(_channelInfo.SiteId, _channelInfo.Id)}"" target=""_blank"" title=""浏览页面""><img align=""absmiddle"" border=""0"" src=""{_iconFolderUrl}"" style=""max-height: 22px; max-width: 22px"" /></a>"
                         : $@"<img align=""absmiddle"" src=""{_iconFolderUrl}"" style=""max-height: 22px; max-width: 22px"" />");
             }
 
@@ -87,19 +89,19 @@ namespace SiteServer.BackgroundPages.Core
             {
                 if (loadingType == ELoadingType.ContentTree)
                 {
-                    var linkUrl = PageContent.GetRedirectUrl(_nodeInfo.PublishmentSystemId, _nodeInfo.NodeId);
+                    var linkUrl = PageContent.GetRedirectUrl(_channelInfo.SiteId, _channelInfo.Id);
 
                     htmlBuilder.Append(
-                        $"<a href='{linkUrl}' isLink='true' onclick='fontWeightLink(this)' target='content'>{_nodeInfo.NodeName}</a>");
+                        $"<a href='{linkUrl}' isLink='true' onclick='fontWeightLink(this)' target='content'>{_channelInfo.ChannelName}</a>");
                 }
                 else if (loadingType == ELoadingType.ChannelSelect)
                 {
-                    var linkUrl = ModalChannelSelect.GetRedirectUrl(_nodeInfo.PublishmentSystemId, _nodeInfo.NodeId);
+                    var linkUrl = ModalChannelSelect.GetRedirectUrl(_channelInfo.SiteId, _channelInfo.Id);
                     if (additional != null)
                     {
                         if (!string.IsNullOrEmpty(additional["linkUrl"]))
                         {
-                            linkUrl = additional["linkUrl"] + _nodeInfo.NodeId;
+                            linkUrl = additional["linkUrl"] + _channelInfo.Id;
                         }
                         else
                         {
@@ -109,44 +111,44 @@ namespace SiteServer.BackgroundPages.Core
                             }
                         }
                     }
-                    htmlBuilder.Append($"<a href='{linkUrl}'>{_nodeInfo.NodeName}</a>");
+                    htmlBuilder.Append($"<a href='{linkUrl}'>{_channelInfo.ChannelName}</a>");
                 }
                 else
                 {
-                    if (AdminUtility.HasChannelPermissions(_administratorName, _nodeInfo.PublishmentSystemId, _nodeInfo.NodeId, AppManager.Permissions.Channel.ChannelEdit))
+                    if (AdminUtility.HasChannelPermissions(_administratorName, _channelInfo.SiteId, _channelInfo.Id, ConfigManager.Permissions.Channel.ChannelEdit))
                     {
-                        var onClickUrl = ModalChannelEdit.GetOpenWindowString(_nodeInfo.PublishmentSystemId, _nodeInfo.NodeId, returnUrl);
+                        var onClickUrl = ModalChannelEdit.GetOpenWindowString(_channelInfo.SiteId, _channelInfo.Id, returnUrl);
                         htmlBuilder.Append(
-                            $@"<a href=""javascript:;;"" onClick=""{onClickUrl}"" title=""快速编辑栏目"">{_nodeInfo.NodeName}</a>");
+                            $@"<a href=""javascript:;;"" onClick=""{onClickUrl}"" title=""快速编辑栏目"">{_channelInfo.ChannelName}</a>");
 
                     }
                     else
                     {
-                        htmlBuilder.Append($@"<a href=""javascript:;;"">{_nodeInfo.NodeName}</a>");
+                        htmlBuilder.Append($@"<a href=""javascript:;;"">{_channelInfo.ChannelName}</a>");
                     }
                 }
             }
             else
             {
-                htmlBuilder.Append(_nodeInfo.NodeName);
+                htmlBuilder.Append(_channelInfo.ChannelName);
             }
 
-            if (_nodeInfo.PublishmentSystemId != 0)
+            if (_channelInfo.SiteId != 0)
             {
                 htmlBuilder.Append("&nbsp;");
 
-                htmlBuilder.Append(NodeManager.GetNodeTreeLastImageHtml(_publishmentSystemInfo, _nodeInfo));
+                htmlBuilder.Append(ChannelManager.GetNodeTreeLastImageHtml(_siteInfo, _channelInfo));
 
-                if (_nodeInfo.ContentNum < 0) return htmlBuilder.ToString();
+                if (_channelInfo.ContentNum < 0) return htmlBuilder.ToString();
 
                 htmlBuilder.Append(
-                    $@"<span style=""font-size:8pt;font-family:arial"" class=""gray"">({_nodeInfo.ContentNum})</span>");
+                    $@"<span style=""font-size:8pt;font-family:arial"" class=""gray"">({_channelInfo.ContentNum})</span>");
             }
 
             return htmlBuilder.ToString();
         }
 
-        public static string GetScript(PublishmentSystemInfo publishmentSystemInfo, ELoadingType loadingType, NameValueCollection additional)
+        public static string GetScript(SiteInfo siteInfo, ELoadingType loadingType, NameValueCollection additional)
         {
             var script = @"
 <script language=""JavaScript"">
@@ -200,7 +202,7 @@ function fontWeightLink(element){
     weightedLink = element;
 }
 
-var completedNodeID = null;
+var completedChannelId = null;
 function displayChildren(img){
 	if (!img) return;
 
@@ -208,7 +210,7 @@ function displayChildren(img){
 
     var isToOpen = img.getAttribute('isOpen') == 'false';
     var isByAjax = img.getAttribute('isAjax') == 'true';
-    var nodeID = img.getAttribute('id');
+    var channelId = img.getAttribute('id');
 
 	if (img && img.getAttribute('isOpen') != null){
 		if (img.getAttribute('isOpen') == 'false'){
@@ -226,7 +228,7 @@ function displayChildren(img){
         div.innerHTML = ""<img align='absmiddle' border='0' src='{iconLoadingUrl}' /> 加载中，请稍候..."";
         img.parentNode.appendChild(div);
         $(div).addClass('loading');
-        loadingChannels(tr, img, div, nodeID);
+        loadingChannels(tr, img, div, channelId);
     }
     else
     {
@@ -267,9 +269,9 @@ function displayChildren(img){
 ";
            
             script += $@"
-function loadingChannels(tr, img, div, nodeID){{
+function loadingChannels(tr, img, div, channelId){{
     var url = '{AjaxOtherService.GetGetLoadingChannelsUrl()}';
-    var pars = '{AjaxOtherService.GetGetLoadingChannelsParameters(publishmentSystemInfo.PublishmentSystemId, loadingType, additional)}&parentID=' + nodeID;
+    var pars = '{AjaxOtherService.GetGetLoadingChannelsParameters(siteInfo.Id, loadingType, additional)}&parentID=' + channelId;
 
     jQuery.post(url, pars, function(data, textStatus)
     {{
@@ -277,17 +279,17 @@ function loadingChannels(tr, img, div, nodeID){{
         img.setAttribute('isAjax', 'false');
         img.parentNode.removeChild(div);
     }});
-    completedNodeID = nodeID;
+    completedChannelId = channelId;
 }}
 
 function loadingChannelsOnLoad(paths){{
     if (paths && paths.length > 0){{
-        var nodeIDs = paths.split(',');
-        var nodeID = nodeIDs[0];
-        var img = $('#' + nodeID);
+        var channelIds = paths.split(',');
+        var channelId = channelIds[0];
+        var img = $('#' + channelId);
         if (img.attr('isOpen') == 'false'){{
             displayChildren(img[0]);
-            if (completedNodeID && completedNodeID == nodeID){{
+            if (completedChannelId && completedChannelId == channelId){{
                 if (paths.indexOf(',') != -1){{
 paths = paths.substring(paths.indexOf(',') + 1);
                     setTimeout(""loadingChannelsOnLoad('"" + paths + ""')"", 1000);

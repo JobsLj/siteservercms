@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Data;
-using BaiRong.Core.Diagnostics;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
 
 namespace SiteServer.BackgroundPages.Settings
 {
@@ -18,22 +17,20 @@ namespace SiteServer.BackgroundPages.Settings
 
             if (IsPostBack) return;
 
-            VerifyAdministratorPermissions(AppManager.Permissions.Settings.Utility);
+            VerifyAdministratorPermissions(ConfigManager.Permissions.Settings.Utility);
 
             var parameterList = new List<KeyValuePair<string, string>>
             {
-                new KeyValuePair<string, string>("系统主机名", ComputerUtils.GetHostName()),
+                new KeyValuePair<string, string>("系统主机名", Dns.GetHostName().ToUpper()),
                 new KeyValuePair<string, string>("系统根目录地址", WebConfigUtils.PhysicalApplicationPath),
                 new KeyValuePair<string, string>("系统程序目录地址", PathUtils.PhysicalSiteServerPath),
-                new KeyValuePair<string, string>("计算机的网卡地址", ComputerUtils.GetMacAddress()),
-                new KeyValuePair<string, string>("计算机的CPU标识", ComputerUtils.GetProcessorId()),
-                new KeyValuePair<string, string>("计算机的硬盘序列号", ComputerUtils.GetColumnSerialNumber()),
                 new KeyValuePair<string, string>("域名", PageUtils.GetHost()),
                 new KeyValuePair<string, string>("访问IP", PageUtils.GetIpAddress()),
                 new KeyValuePair<string, string>(".NET版本", Environment.Version.ToString()),
-                new KeyValuePair<string, string>("SiteServer CMS 版本", AppManager.GetFullVersion()),
+                new KeyValuePair<string, string>("SiteServer CMS 版本", SystemManager.Version),
+                new KeyValuePair<string, string>("SiteServer.Plugin 版本", SystemManager.PluginVersion),
                 new KeyValuePair<string, string>("最近升级时间", DateUtils.GetDateAndTimeString(ConfigManager.Instance.UpdateDate)),
-                new KeyValuePair<string, string>("数据库类型", EDatabaseTypeUtils.GetValue(WebConfigUtils.DatabaseType)),
+                new KeyValuePair<string, string>("数据库类型", WebConfigUtils.DatabaseType.Value),
                 new KeyValuePair<string, string>("数据库名称", SqlUtils.GetDatabaseNameFormConnectionString(WebConfigUtils.DatabaseType, WebConfigUtils.ConnectionString))
             };
 

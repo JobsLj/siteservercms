@@ -2,9 +2,8 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Web.UI.HtmlControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
-using SiteServer.CMS.StlParser.Parsers;
 using SiteServer.CMS.StlParser.Utility;
 
 namespace SiteServer.CMS.StlParser.StlElement
@@ -46,7 +45,6 @@ namespace SiteServer.CMS.StlParser.StlElement
         public static string Parse(PageInfo pageInfo, ContextInfo contextInfo)
         {
             var type = string.Empty;
-            var returnUrl = string.Empty;
 
             foreach (var name in contextInfo.Attributes.Keys)
             {
@@ -54,10 +52,6 @@ namespace SiteServer.CMS.StlParser.StlElement
                 if (StringUtils.EqualsIgnoreCase(name, AttributeType))
                 {
                     type = value;
-                }
-                else if (StringUtils.EqualsIgnoreCase(name, AttributeReturnUrl))
-                {
-                    returnUrl = StlEntityParser.ReplaceStlEntitiesForAttributeValue(value, pageInfo, contextInfo);
                 }
             }
 
@@ -83,10 +77,10 @@ namespace SiteServer.CMS.StlParser.StlElement
             //    }
             //}
 
-            return ParseImpl(pageInfo, contextInfo, type, returnUrl);
+            return ParseImpl(pageInfo, contextInfo, type);
         }
 
-        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, string type, string returnUrl)
+        private static string ParseImpl(PageInfo pageInfo, ContextInfo contextInfo, string type)
         {
             var stlAnchor = new HtmlAnchor();
 
@@ -109,7 +103,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                 //{
                 //    if (string.IsNullOrEmpty(returnUrl))
                 //    {
-                //        returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.PublishmentSystemInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
+                //        returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.SiteInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
                 //    }
 
                 //    url = HomeUtils.GetLoginUrl(pageInfo.HomeUrl, returnUrl);
@@ -118,7 +112,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                 //{
                 //    if (string.IsNullOrEmpty(returnUrl))
                 //    {
-                //        returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.PublishmentSystemInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
+                //        returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.SiteInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
                 //    }
 
                 //    url = HomeUtils.GetRegisterUrl(pageInfo.HomeUrl, returnUrl);
@@ -127,14 +121,14 @@ namespace SiteServer.CMS.StlParser.StlElement
                 //{
                 //    if (string.IsNullOrEmpty(returnUrl))
                 //    {
-                //        returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.PublishmentSystemInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
+                //        returnUrl = StlUtility.GetStlCurrentUrl(pageInfo.SiteInfo, contextInfo.ChannelId, contextInfo.ContentId, contextInfo.ContentInfo, pageInfo.TemplateInfo.TemplateType, pageInfo.TemplateInfo.TemplateId);
                 //    }
 
                 //    url = HomeUtils.GetLogoutUrl(pageInfo.HomeUrl, returnUrl);
                 //}
                 if (StringUtils.EqualsIgnoreCase(type, TypeAddFavorite))
                 {
-                    pageInfo.SetPageScripts(TypeAddFavorite, @"
+                    pageInfo.BodyCodes[TypeAddFavorite] = @"
 <script type=""text/javascript""> 
     function AddFavorite(){  
         if (document.all) {
@@ -145,13 +139,15 @@ namespace SiteServer.CMS.StlParser.StlElement
         }
     }
 </script>
-", true);
+";
                     stlAnchor.Attributes["onclick"] = "AddFavorite();";
                 }
                 else if (StringUtils.EqualsIgnoreCase(type, TypeSetHomePage))
                 {
-                    url = pageInfo.PublishmentSystemInfo.Additional.WebUrl;
-                    pageInfo.AddPageEndScriptsIfNotExists(TypeAddFavorite, $@"
+                    url = pageInfo.SiteInfo.Additional.WebUrl;
+                    if (!pageInfo.FootCodes.ContainsKey(TypeAddFavorite))
+                    {
+                        pageInfo.FootCodes.Add(TypeAddFavorite, $@"
 <script type=""text/javascript""> 
     function SetHomepage(){{   
         if (document.all) {{
@@ -173,11 +169,12 @@ namespace SiteServer.CMS.StlParser.StlElement
     }}
 </script>
 ");
+                    }
                     stlAnchor.Attributes["onclick"] = "SetHomepage();";
                 }
                 else if (StringUtils.EqualsIgnoreCase(type, TypeTranslate))
                 {
-                    pageInfo.AddPageScriptsIfNotExists(PageInfo.Const.JsAhTranslate);
+                    pageInfo.AddPageBodyCodeIfNotExists(PageInfo.Const.JsAhTranslate);
 
                     var msgToTraditionalChinese = "繁體";
                     var msgToSimplifiedChinese = "简体";
@@ -200,7 +197,7 @@ namespace SiteServer.CMS.StlParser.StlElement
                         stlAnchor.ID = "translateLink";
                     }
 
-                    pageInfo.SetPageEndScripts(TypeTranslate, $@"
+                    pageInfo.FootCodes[TypeTranslate] = $@"
 <script type=""text/javascript""> 
 var defaultEncoding = 0;
 var translateDelay = 0;
@@ -210,7 +207,7 @@ var msgToSimplifiedChinese = ""{msgToSimplifiedChinese}"";
 var translateButtonId = ""{stlAnchor.ClientID}"";
 translateInitilization();
 </script>
-");
+";
                 }
                 else if (StringUtils.EqualsIgnoreCase(type, TypeClose))
                 {

@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Text;
 using System.Web.UI.HtmlControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.StlParser.Model;
 using SiteServer.CMS.StlParser.Utility;
 
@@ -56,7 +56,9 @@ namespace SiteServer.CMS.StlParser.StlElement
                 zoomId = "content";
             }
 
-            pageInfo.AddPageScriptsIfNotExists(PageInfo.Const.JsAeStlZoom, @"
+            if (!pageInfo.BodyCodes.ContainsKey(PageInfo.Const.JsAeStlZoom))
+            {
+                pageInfo.BodyCodes.Add(PageInfo.Const.JsAeStlZoom, @"
 <script language=""JavaScript"" type=""text/javascript"">
 function stlDoZoom(zoomId, size){
     var artibody = document.getElementById(zoomId);
@@ -73,6 +75,7 @@ function stlDoZoom(zoomId, size){
 }
 </script>
 ");
+            }
 
             if (string.IsNullOrEmpty(contextInfo.InnerXml))
             {

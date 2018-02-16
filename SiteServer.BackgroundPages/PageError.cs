@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
 
 namespace SiteServer.BackgroundPages
 {
@@ -19,9 +20,17 @@ namespace SiteServer.BackgroundPages
                 var logId = TranslateUtils.ToInt(Request.QueryString["logId"]);
                 if (logId > 0)
                 {
-                    var pair = BaiRongDataProvider.ErrorLogDao.GetMessageAndStacktrace(logId);
+                    var pair = DataProvider.ErrorLogDao.GetMessageAndStacktrace(logId);
                     message = pair.Key;
                     stackTrace = pair.Value;
+
+                    var rollbarTitle = message;
+                    if (rollbarTitle == "未将对象引用设置到对象的实例。")
+                    {
+                        rollbarTitle = StringUtils.Guid();
+                    }
+
+                    LtlStackTrace.Text = $@"<script>Rollbar.error(""{StringUtils.ToJsString(rollbarTitle)}"", {{version: ""{StringUtils.ToJsString(SystemManager.Version) + (WebConfigUtils.IsNightlyUpdate ? "-nightly" : string.Empty)}"", stackTrace: ""{StringUtils.ToJsString(stackTrace)}""}});</script>";
                 }
                 if (string.IsNullOrEmpty(message))
                 {
@@ -38,7 +47,7 @@ namespace SiteServer.BackgroundPages
             LtlMessage.Text = message;
             if (!string.IsNullOrEmpty(stackTrace))
             {
-                LtlStackTrace.Text = $@"<!-- 
+                LtlStackTrace.Text += $@"<!-- 
 {stackTrace}
 -->";
             }

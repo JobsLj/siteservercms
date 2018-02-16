@@ -1,7 +1,9 @@
 bin/
 obj/
+home/
 SiteFiles/BackupFiles/
 SiteFiles/Plugins/
+SiteFiles/packages/
 SiteFiles/SiteTemplates/
 SiteFiles/TemporaryFiles/
 SiteFiles/UserFiles/test/
@@ -34,4 +36,3 @@ test26/
 test27/
 test28/
 test29/
-tmwcn/

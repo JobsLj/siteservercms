@@ -1,57 +1,36 @@
 ﻿using System;
-using System.Collections.Generic;
-using BaiRong.Core;
-using BaiRong.Core.Data;
-using BaiRong.Core.Model;
-using BaiRong.Core.Model.Enumerations;
+using System.Diagnostics;
+using System.Reflection;
+using SiteServer.CMS.Model;
+using SiteServer.Utils;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.CMS.Core
 {
     public class SystemManager
     {
-        public static void Install(string adminName, string adminPassword)
+        static SystemManager()
         {
-            InstallOrUpgrade(adminName, adminPassword);
+            Version = FileVersionInfo.GetVersionInfo(PathUtils.GetBinDirectoryPath("SiteServer.CMS.dll")).ProductVersion;
+            PluginVersion = FileVersionInfo.GetVersionInfo(PathUtils.GetBinDirectoryPath("SiteServer.Plugin.dll")).ProductVersion;
+
+            //var ssemblyName = assembly.GetName();
+            //var assemblyVersion = ssemblyName.Version;
+            //var version = assemblyVersion.ToString();
+            //if (StringUtils.EndsWith(version, ".0"))
+            //{
+            //    version = version.Substring(0, version.Length - 2);
+            //}
+            //Version = version;
         }
 
-        public static void Upgrade()
+        public static string Version { get; }
+
+        public static string PluginVersion { get; }
+
+        public static void InstallDatabase(string adminName, string adminPassword)
         {
-            InstallOrUpgrade(string.Empty, string.Empty);
-        }
-
-        private static void InstallOrUpgrade(string adminName, string adminPassword)
-        {
-            var providers = new List<DataProviderBase>();
-            providers.AddRange(BaiRongDataProvider.AllProviders);
-            providers.AddRange(DataProvider.AllProviders);
-
-            foreach (var provider in providers)
-            {
-                if (string.IsNullOrEmpty(provider.TableName) || provider.TableColumns == null || provider.TableColumns.Count <= 0) continue;
-
-                if (!BaiRongDataProvider.DatabaseDao.IsTableExists(provider.TableName))
-                {
-                    BaiRongDataProvider.DatabaseDao.CreateSystemTable(provider.TableName, provider.TableColumns);
-                }
-                else
-                {
-                    BaiRongDataProvider.DatabaseDao.AlterSystemTable(provider.TableName, provider.TableColumns);
-                }
-            }
-
-            var configInfo = BaiRongDataProvider.ConfigDao.GetConfigInfo();
-            if (configInfo == null)
-            {
-                configInfo = new ConfigInfo(true, AppManager.Version, DateTime.Now, string.Empty);
-                BaiRongDataProvider.ConfigDao.Insert(configInfo);
-            }
-            else
-            {
-                configInfo.DatabaseVersion = AppManager.Version;
-                configInfo.IsInitialized = true;
-                configInfo.UpdateDate = DateTime.Now;
-                BaiRongDataProvider.ConfigDao.Update(configInfo);
-            }
+            SyncDatabase();
 
             if (!string.IsNullOrEmpty(adminName) && !string.IsNullOrEmpty(adminPassword))
             {
@@ -65,23 +44,56 @@ namespace SiteServer.CMS.Core
 
                 string errorMessage;
                 AdminManager.CreateAdministrator(administratorInfo, out errorMessage);
-                BaiRongDataProvider.AdministratorsInRolesDao.AddUserToRole(adminName, EPredefinedRoleUtils.GetValue(EPredefinedRole.ConsoleAdministrator));
+                DataProvider.AdministratorsInRolesDao.AddUserToRole(adminName, EPredefinedRoleUtils.GetValue(EPredefinedRole.ConsoleAdministrator));
             }
-
-            BaiRongDataProvider.TableCollectionDao.CreateAllTableCollectionInfoIfNotExists();
         }
 
-        public static bool IsNeedUpgrade()
+        public static void SyncDatabase()
         {
-            return !StringUtils.EqualsIgnoreCase(AppManager.Version, BaiRongDataProvider.ConfigDao.GetDatabaseVersion());
+            CacheUtils.ClearAll();
+
+            foreach (var provider in DataProvider.AllProviders)
+            {
+                if (string.IsNullOrEmpty(provider.TableName) || provider.TableColumns == null || provider.TableColumns.Count <= 0) continue;
+
+                if (!DataProvider.DatabaseDao.IsTableExists(provider.TableName))
+                {
+                    DataProvider.DatabaseDao.CreateSystemTable(provider.TableName, provider.TableColumns);
+                }
+                else
+                {
+                    DataProvider.DatabaseDao.AlterSystemTable(provider.TableName, provider.TableColumns);
+                }
+            }
+
+            var configInfo = DataProvider.ConfigDao.GetConfigInfo();
+            if (configInfo == null)
+            {
+                configInfo = new ConfigInfo(true, Version, DateTime.Now, string.Empty);
+                DataProvider.ConfigDao.Insert(configInfo);
+            }
+            else
+            {
+                configInfo.DatabaseVersion = Version;
+                configInfo.IsInitialized = true;
+                configInfo.UpdateDate = DateTime.Now;
+                DataProvider.ConfigDao.Update(configInfo);
+            }
+
+            DataProvider.TableDao.CreateAllTableCollectionInfoIfNotExists();
+        }
+
+        public static bool IsNeedUpdate()
+        {
+            return !StringUtils.EqualsIgnoreCase(Version, DataProvider.ConfigDao.GetDatabaseVersion());
         }
 
         public static bool IsNeedInstall()
         {
-            var isNeedInstall = !BaiRongDataProvider.ConfigDao.IsInitialized();
+            var isNeedInstall = !DataProvider.ConfigDao.IsInitialized();
             if (isNeedInstall)
             {
-                isNeedInstall = !BaiRongDataProvider.ConfigDao.IsInitialized();
+                isNeedInstall = !DataProvider.ConfigDao.IsInitialized();
             }
             return isNeedInstall;
         }

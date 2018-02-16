@@ -1,22 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
-using BaiRong.Core.Model.Enumerations;
+using SiteServer.Utils;
 using SiteServer.CMS.Core;
-using BaiRong.Core.Data;
+using SiteServer.Plugin;
+using SiteServer.Utils.Enumerations;
 
 namespace SiteServer.BackgroundPages
 {
-    public class PageInstaller : Page
+    public class PageInstaller : BasePage
 	{
         public Literal LtlVersionInfo;
-        public Literal LtlStepTitle;
-
-        public Literal LtlErrorMessage;
 
         public PlaceHolder PhStep1;
         public CheckBox ChkIAgree;
@@ -53,102 +48,48 @@ namespace SiteServer.BackgroundPages
         public TextBox TbAdminName;
 
         public PlaceHolder PhStep5;
+	    public Literal LtlGo;
 
-        private string GetSetpTitleString(int step)
+        protected override bool IsSinglePage => true;
+
+	    protected override bool IsAccessable => true;
+
+	    public static string GetRedirectUrl()
+	    {
+	        return PageUtils.GetSiteServerUrl("installer/default", null);
+	    }
+
+	    public void Page_Load(object sender, EventArgs e)
         {
-            PhStep1.Visible = PhStep2.Visible = PhStep3.Visible = PhStep4.Visible = PhStep5.Visible = false;
-            if (step == 1)
+            if (IsPostBack) return;
+
+            if (!SystemManager.IsNeedInstall())
             {
-                PhStep1.Visible = true;
-            }
-            else if (step == 2)
-            {
-                PhStep2.Visible = true;
-            }
-            else if (step == 3)
-            {
-                PhStep3.Visible = true;
-                PhSql1.Visible = true;
-                PhSql2.Visible = false;
-            }
-            else if (step == 4)
-            {
-                PhStep4.Visible = true;
-            }
-            else if (step == 5)
-            {
-                PhStep5.Visible = true;
+                Page.Response.Write("系统已安装成功，向导被禁用");
+                Page.Response.End();
+                return;
             }
 
-            var builder = new StringBuilder();
+            LtlVersionInfo.Text = SystemManager.Version;
+            SetSetp(1);
 
-            for (var i = 1; i <= 5; i++)
-            {
-                var liClass = string.Empty;
-                if (i == step)
-                {
-                    liClass = @" class=""current""";
-                }
-                string imageUrl = $"images/step{i}{((i <= step) ? "a" : "b")}.gif";
-                var title = string.Empty;
-                if (i == 1)
-                {
-                    title = "许可协议";
-                }
-                else if (i == 2)
-                {
-                    title = "环境检测";
-                }
-                else if (i == 3)
-                {
-                    title = "数据库设置";
-                }
-                else if (i == 4)
-                {
-                    title = "安装产品";
-                }
-                else if (i == 5)
-                {
-                    title = "安装完成";
-                }
-                builder.Append($@"<li{liClass}><img src=""{imageUrl}"" />{title}</li>");
-            }
+            DatabaseTypeUtils.AddListItems(DdlSqlDatabaseType);
 
-            return builder.ToString();
+            EBooleanUtils.AddListItems(DdlIsDefaultPort, "默认数据库端口", "自定义数据库端口");
+            ControlUtils.SelectSingleItemIgnoreCase(DdlIsDefaultPort, true.ToString());
+
+            PhSqlPort.Visible = false;
+
+            EBooleanUtils.AddListItems(DdlIsProtectData, "加密", "不加密");
+            ControlUtils.SelectSingleItemIgnoreCase(DdlIsProtectData, false.ToString());
+
+            LtlGo.Text = $@"<a class=""btn btn-success m-l-5"" href=""{PageUtils.GetAdminDirectoryUrl(string.Empty)}"">进入后台</a>";
         }
-	
-		public void Page_Load(object sender, EventArgs e)
-		{
-            if (!IsPostBack)
-            {
-                var isInstalled = !SystemManager.IsNeedInstall();
-
-                if (isInstalled)
-                {
-                    Page.Response.Write("系统已安装成功，向导被禁用");
-                    Page.Response.End();
-                    return;
-                }
-
-                LtlVersionInfo.Text = $"SITESERVER {AppManager.GetFullVersion()}";
-                LtlStepTitle.Text = GetSetpTitleString(1);
-
-                EDatabaseTypeUtils.AddListItems(DdlSqlDatabaseType);
-
-                EBooleanUtils.AddListItems(DdlIsDefaultPort, "默认数据库端口", "自定义数据库端口");
-                ControlUtils.SelectSingleItemIgnoreCase(DdlIsDefaultPort, true.ToString());
-
-                PhSqlPort.Visible = false;
-
-                EBooleanUtils.AddListItems(DdlIsProtectData, "加密", "不加密");
-                ControlUtils.SelectSingleItemIgnoreCase(DdlIsProtectData, false.ToString());
-            }
-		}
 
         public void DdlSqlDatabaseType_SelectedIndexChanged(object sender, EventArgs e)
         {
-            var databaseType = EDatabaseTypeUtils.GetEnumType(DdlSqlDatabaseType.SelectedValue);
-            PhSqlOracleDatabase.Visible = databaseType == EDatabaseType.Oracle;
+            var databaseType = DatabaseTypeUtils.GetEnumType(DdlSqlDatabaseType.SelectedValue);
+            PhSqlOracleDatabase.Visible = databaseType == DatabaseType.Oracle;
         }
 
         public void DdlIsDefaultPort_SelectedIndexChanged(object sender, EventArgs e)
@@ -161,10 +102,9 @@ namespace SiteServer.BackgroundPages
             if (ChkIAgree.Checked)
             {
                 BtnStep2.Visible = true;
-                LtlErrorMessage.Text = string.Empty;
 
                 LtlDomain.Text = PageUtils.GetHost();
-                LtlVersion.Text = AppManager.GetFullVersion();
+                LtlVersion.Text = SystemManager.Version;
                 LtlNetVersion.Text = $"{Environment.Version.Major}.{Environment.Version.Minor}";
                 LtlPhysicalApplicationPath.Text = WebConfigUtils.PhysicalApplicationPath;
 
@@ -199,35 +139,32 @@ Disallow: /SiteFiles/");
 
                 if (!isRootWritable || !isSiteFilesWritable)
                 {
-                    ShowErrorMessage("系统检测到文件夹权限不足，您需要赋予可写权限");
+                    FailMessage("系统检测到文件夹权限不足，您需要赋予可写权限");
                     BtnStep2.Visible = false;
                 }
 
-                LtlStepTitle.Text = GetSetpTitleString(2);
+                SetSetp(2);
             }
             else
             {
-                ShowErrorMessage("您必须同意软件许可协议才能安装！");
+                FailMessage("您必须同意软件许可协议才能安装！");
             }
         }
 
         public void BtnStep2_Click(object sender, EventArgs e)
         {
-            LtlErrorMessage.Text = string.Empty;
-            LtlStepTitle.Text = GetSetpTitleString(3);
+            SetSetp(3);
         }
 
         public void BtnStep3_Click(object sender, EventArgs e)
         {
-            LtlErrorMessage.Text = string.Empty;
-
             if (PhSql1.Visible)
             {
                 HihSqlHiddenPassword.Value = TbSqlPassword.Text;
                 bool isConnectValid;
                 string errorMessage;
                 var databaseNameList = new List<string>();
-                var databaseType = EDatabaseTypeUtils.GetEnumType(DdlSqlDatabaseType.SelectedValue);
+                var databaseType = DatabaseTypeUtils.GetEnumType(DdlSqlDatabaseType.SelectedValue);
                 if (string.IsNullOrEmpty(TbSqlServer.Text))
                 {
                     isConnectValid = false;
@@ -243,20 +180,20 @@ Disallow: /SiteFiles/");
                     isConnectValid = false;
                     errorMessage = "数据库用户必须填写。";
                 }
-                else if (databaseType == EDatabaseType.Oracle && string.IsNullOrEmpty(TbSqlOracleDatabase.Text))
+                else if (databaseType == DatabaseType.Oracle && string.IsNullOrEmpty(TbSqlOracleDatabase.Text))
                 {
                     isConnectValid = false;
                     errorMessage = "数据库名称必须填写。";
                 }
                 else
                 {
-                    var connectionStringWithoutDatabaseName = GetConnectionString(databaseType == EDatabaseType.Oracle);
-                    isConnectValid = BaiRongDataProvider.DatabaseDao.ConnectToServer(databaseType, connectionStringWithoutDatabaseName, out databaseNameList, out errorMessage);
+                    var connectionStringWithoutDatabaseName = GetConnectionString(databaseType == DatabaseType.Oracle);
+                    isConnectValid = DataProvider.DatabaseDao.ConnectToServer(databaseType, connectionStringWithoutDatabaseName, out databaseNameList, out errorMessage);
                 }
                 
                 if (isConnectValid)
                 {
-                    if (databaseType != EDatabaseType.Oracle)
+                    if (databaseType != DatabaseType.Oracle)
                     {
                         DdlSqlDatabaseName.Items.Clear();
 
@@ -271,50 +208,47 @@ Disallow: /SiteFiles/");
                     }
                     else
                     {
-                        LtlStepTitle.Text = GetSetpTitleString(4);
+                        SetSetp(4);
                     }
                 }
                 else
                 {
-                    ShowErrorMessage(errorMessage);
+                    FailMessage(errorMessage);
                 }
             }
             else
             {
-                LtlStepTitle.Text = GetSetpTitleString(4);
+                SetSetp(4);
             }
         }
 
         public void BtnStep4_Click(object sender, EventArgs e)
         {
-            LtlErrorMessage.Text = string.Empty;
-
             string errorMessage;
             if (CheckLoginValid(out errorMessage))
             {
                 if (InstallDatabase(out errorMessage))
                 {
-                    LtlStepTitle.Text = GetSetpTitleString(5);
+                    SetSetp(5);
                 }
                 else
                 {
-                    ShowErrorMessage(errorMessage);
+                    FailMessage(errorMessage);
                 }
             }
             else
             {
-                ShowErrorMessage(errorMessage);
+                FailMessage(errorMessage);
             }
         }
 
         public void BtnPrevious_Click(object sender, EventArgs e)
 		{
-            LtlErrorMessage.Text = string.Empty;
             DdlSqlDatabaseType.Enabled = true;
 
             if (PhStep4.Visible)
             {
-                LtlStepTitle.Text = GetSetpTitleString(3);
+                SetSetp(3);
                 PhSql1.Visible = true;
                 PhSql2.Visible = false;
             }
@@ -327,26 +261,49 @@ Disallow: /SiteFiles/");
                 }
                 else
                 {
-                    LtlStepTitle.Text = GetSetpTitleString(2);
+                    SetSetp(2);
                 }
             }
             else if (PhStep2.Visible)
             {
-                LtlStepTitle.Text = GetSetpTitleString(1);
+                SetSetp(1);
             }
 		}
 
+        private void SetSetp(int step)
+        {
+            PhStep1.Visible = PhStep2.Visible = PhStep3.Visible = PhStep4.Visible = PhStep5.Visible = false;
+            if (step == 1)
+            {
+                PhStep1.Visible = true;
+            }
+            else if (step == 2)
+            {
+                PhStep2.Visible = true;
+            }
+            else if (step == 3)
+            {
+                PhStep3.Visible = true;
+                PhSql1.Visible = true;
+                PhSql2.Visible = false;
+            }
+            else if (step == 4)
+            {
+                PhStep4.Visible = true;
+            }
+            else if (step == 5)
+            {
+                PhStep5.Visible = true;
+            }
+        }
+
         private string GetConnectionString(bool isDatabaseName)
         {
-            var databaseType = EDatabaseTypeUtils.GetEnumType(DdlSqlDatabaseType.SelectedValue);
+            var databaseType = DatabaseTypeUtils.GetEnumType(DdlSqlDatabaseType.SelectedValue);
             var databaseName = string.Empty;
             if (isDatabaseName)
             {
-                databaseName = DdlSqlDatabaseName.SelectedValue;
-            }
-            if (databaseType == EDatabaseType.Oracle)
-            {
-                databaseName = TbSqlOracleDatabase.Text;
+                databaseName = databaseType == DatabaseType.Oracle ? TbSqlOracleDatabase.Text : DdlSqlDatabaseName.SelectedValue;
             }
             return SqlUtils.GetConnectionString(databaseType, TbSqlServer.Text, TranslateUtils.ToBool(DdlIsDefaultPort.SelectedValue), TranslateUtils.ToInt(TbSqlPort.Text), TbSqlUserName.Text, HihSqlHiddenPassword.Value, databaseName);
         }
@@ -378,10 +335,10 @@ Disallow: /SiteFiles/");
                 errorMessage = "两次输入的管理员密码不一致！";
                 return false;
             }
-            if (!EUserPasswordRestrictionUtils.IsValid(TbAdminPassword.Text, ConfigManager.SystemConfigInfo.AdminPasswordRestriction))
+            if (!EUserPasswordRestrictionUtils.IsValid(TbAdminPassword.Text, EUserPasswordRestrictionUtils.GetValue(EUserPasswordRestriction.LetterAndDigit)))
             {
                 errorMessage =
-                    $"密码不符合规则，请包含{EUserPasswordRestrictionUtils.GetText(EUserPasswordRestrictionUtils.GetEnumType(ConfigManager.SystemConfigInfo.AdminPasswordRestriction))}";
+                    $"密码不符合规则，请包含{EUserPasswordRestrictionUtils.GetText(EUserPasswordRestriction.LetterAndDigit)}";
                 return false;
             }
             return true;
@@ -394,8 +351,8 @@ Disallow: /SiteFiles/");
             try
             {
                 //var errorBuilder = new StringBuilder();
-                //BaiRongDataProvider.DatabaseDao.Install(errorBuilder);
-                SystemManager.Install(TbAdminName.Text, TbAdminPassword.Text);
+                //DataProvider.DatabaseDao.Install(errorBuilder);
+                SystemManager.InstallDatabase(TbAdminName.Text, TbAdminPassword.Text);
                 
                 return true;
             }
@@ -415,10 +372,10 @@ Disallow: /SiteFiles/");
             try
             {
                 var isProtectData = TranslateUtils.ToBool(DdlIsProtectData.SelectedValue);
-                var databaseType = EDatabaseTypeUtils.GetEnumType(DdlSqlDatabaseType.SelectedValue);
+                var databaseType = DatabaseTypeUtils.GetEnumType(DdlSqlDatabaseType.SelectedValue);
                 var connectionString = GetConnectionString(true);
 
-                WebConfigUtils.UpdateWebConfig(isProtectData, databaseType, connectionString, "siteserver", "vEnfkn16t8aeaZKG3a4Gl9UUlzf4vgqU9xwh8ZV5");
+                WebConfigUtils.UpdateWebConfig(isProtectData, databaseType, connectionString, "SiteServer", StringUtils.GetShortGuid(), false);
 
                 returnValue = true;
             }
@@ -428,16 +385,6 @@ Disallow: /SiteFiles/");
             }
 
             return returnValue;
-        }
-
-        public string GetSiteServerUrl()
-        {
-            return PageUtils.GetAdminDirectoryUrl(string.Empty);
-        }
-
-        private void ShowErrorMessage(string errorMessage)
-        {
-            LtlErrorMessage.Text = $@"<img src=""images/check_error.gif"" /> {errorMessage}";
         }
 	}
 }

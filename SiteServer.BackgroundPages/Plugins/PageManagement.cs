@@ -1,25 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Linq;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.CMS.Core;
+using SiteServer.Utils;
 using SiteServer.CMS.Plugin;
-using SiteServer.Plugin.Models;
+using SiteServer.CMS.Plugin.Model;
 
 namespace SiteServer.BackgroundPages.Plugins
 {
     public class PageManagement : BasePage
     {
-        public Literal LtlNav;
-        public Repeater RptContents;
-
-        private int _type;
+        public Button BtnReload;
+        public Repeater RptEnabled;
+        public Repeater RptDisabled;
+        public Repeater RptError;
 
         public static string GetRedirectUrl()
         {
             return PageUtils.GetPluginsUrl(nameof(PageManagement), new NameValueCollection
             {
-                {"type", "0"}
+                {"type", "1"}
             });
         }
 
@@ -31,6 +33,49 @@ namespace SiteServer.BackgroundPages.Plugins
             });
         }
 
+        public int PageType { get; set; }
+
+        public int CountEnabled { get; set; }
+        public int CountDisabled { get; set; }
+        public int CountError { get; set; }
+
+        public string Packages
+        {
+            get
+            {
+                var list = new List<object>();
+
+                var dict = PluginManager.GetPluginIdAndVersionDict();
+
+                foreach (var pluginId in dict.Keys)
+                {
+                    var version = dict[pluginId];
+
+                    var versionAndNotes = new
+                    {
+                        Id = pluginId,
+                        Version = version
+                    };
+
+                    list.Add(versionAndNotes);
+                }
+
+                return TranslateUtils.JsonSerialize(list);
+            }
+        }
+
+        public string PackageIds
+        {
+            get
+            {
+                var dict = PluginManager.GetPluginIdAndVersionDict();
+
+                var list = dict.Keys.ToList();
+
+                return TranslateUtils.ObjectCollectionToString(list);
+            }
+        }
+
         public void Page_Load(object sender, EventArgs e)
         {
             if (IsForbidden) return;
@@ -39,154 +84,171 @@ namespace SiteServer.BackgroundPages.Plugins
             {
                 var pluginId = Body.GetQueryString("pluginId");
 
-                try
-                {
-                    var metadata = PluginManager.Delete(pluginId);
-                    Body.AddAdminLog("删除插件", $"插件:{metadata.DisplayName}");
-                    SuccessDeleteMessage();
-                }
-                catch (Exception ex)
-                {
-                    FailDeleteMessage(ex);
-                }
+                PluginManager.Delete(pluginId);
+                Body.AddAdminLog("删除插件", $"插件:{pluginId}");
+
+                CacheUtils.ClearAll();
+                CacheDbUtils.Clear();
+
+                AddScript(AlertUtils.Success("插件删除成功", "插件删除成功，系统需要重载页面", "重新载入", "window.top.location.reload();"));
             }
-            else if (Body.IsQueryExists("enable"))
+            if (Body.IsQueryExists("enable"))
             {
                 var pluginId = Body.GetQueryString("pluginId");
 
-                try
-                {
-                    var metadata = PluginManager.UpdateDisabled(pluginId, false);
-                    Body.AddAdminLog("启用插件", $"插件:{metadata.DisplayName}");
-                    SuccessMessage("成功启用插件");
-                }
-                catch (Exception ex)
-                {
-                    FailDeleteMessage(ex);
-                }
+                PluginManager.UpdateDisabled(pluginId, false);
+                Body.AddAdminLog("启用插件", $"插件:{pluginId}");
+
+                CacheUtils.ClearAll();
+                CacheDbUtils.Clear();
+
+                AddScript(AlertUtils.Success("插件启用成功", "插件启用成功，系统需要重载页面", "重新载入", "window.top.location.reload();"));
             }
             else if (Body.IsQueryExists("disable"))
             {
                 var pluginId = Body.GetQueryString("pluginId");
 
-                try
-                {
-                    var metadata = PluginManager.UpdateDisabled(pluginId, true);
-                    Body.AddAdminLog("禁用插件", $"插件:{metadata.DisplayName}");
-                    SuccessMessage("成功禁用插件");
-                }
-                catch (Exception ex)
-                {
-                    FailDeleteMessage(ex);
-                }
+                PluginManager.UpdateDisabled(pluginId, true);
+                Body.AddAdminLog("禁用插件", $"插件:{pluginId}");
+
+                CacheUtils.ClearAll();
+                CacheDbUtils.Clear();
+
+                AddScript(AlertUtils.Success("插件禁用成功", "插件禁用成功，系统需要重载页面", "重新载入", "window.top.location.reload();"));
             }
 
             if (Page.IsPostBack) return;
 
-            _type = Body.GetQueryInt("type");
+            PageType = Body.GetQueryInt("type", 1);
 
-            VerifyAdministratorPermissions(AppManager.Permissions.Plugins.Management);
+            VerifyAdministratorPermissions(ConfigManager.Permissions.Plugins.Management);
 
-            var list = new List<PluginPair>();
-            int[] arr = {0, 0, 0};
-            foreach (var pluginPair in PluginManager.AllPluginPairs)
+            var listEnabled = new List<PluginInfo>();
+            var listDisabled = new List<PluginInfo>();
+            var listError = new List<PluginInfo>();
+
+            foreach (var pluginInfo in PluginManager.AllPluginInfoList)
             {
-                arr[0]++;
-                if (!pluginPair.Metadata.Disabled)
+                if (pluginInfo.Plugin == null)
                 {
-                    arr[1]++;
+                    CountError++;
+                    listError.Add(pluginInfo);
                 }
                 else
                 {
-                    arr[2]++;
-                }
-
-                if (_type == 0)
-                {
-                    list.Add(pluginPair);
-                }
-                else if (_type == 1)
-                {
-                    if (!pluginPair.Metadata.Disabled)
+                    if (pluginInfo.IsDisabled)
                     {
-                        list.Add(pluginPair);
+                        CountDisabled++;
+                        listDisabled.Add(pluginInfo);
                     }
-                }
-                else if (_type == 2)
-                {
-                    if (pluginPair.Metadata.Disabled)
+                    else
                     {
-                        list.Add(pluginPair);
+                        CountEnabled++;
+                        listEnabled.Add(pluginInfo);
                     }
                 }
             }
 
-            LtlNav.Text = $@"
-<li class=""nav-item {(_type == 0 ? "active" : string.Empty)}"">
-    <a class=""nav-link"" href=""{GetRedirectUrl(0)}"">所有插件 <span class=""badge {(_type == 0 ? "badge-light" : "badge-secondary")}"">{arr[0]}</span></a>
-</li>
-<li class=""nav-item {(_type == 1 ? "active" : string.Empty)}"">
-    <a class=""nav-link"" href=""{GetRedirectUrl(1)}"">已启用 <span class=""badge {(_type == 1 ? "badge-light" : "badge-secondary")}"">{arr[1]}</span></a>
-</li>
-<li class=""nav-item {(_type == 2 ? "active" : string.Empty)}"">
-    <a class=""nav-link"" href=""{GetRedirectUrl(2)}"">已禁用 <span class=""badge {(_type == 2 ? "badge-light" : "badge-secondary")}"">{arr[2]}</span></a>
-</li>";
+            RptEnabled.DataSource = listEnabled;
+            RptEnabled.ItemDataBound += RptRunnable_ItemDataBound;
+            RptEnabled.DataBind();
 
-            RptContents.DataSource = list;
-            RptContents.ItemDataBound += RptContents_ItemDataBound;
-            RptContents.DataBind();
+            RptDisabled.DataSource = listDisabled;
+            RptDisabled.ItemDataBound += RptRunnable_ItemDataBound;
+            RptDisabled.DataBind();
+
+            RptError.DataSource = listError;
+            RptError.ItemDataBound += RptError_ItemDataBound;
+            RptError.DataBind();
         }
 
-        private void RptContents_ItemDataBound(object sender, RepeaterItemEventArgs e)
+        public void BtnReload_Click(object sender, EventArgs e)
+        {
+            CacheUtils.ClearAll();
+            CacheDbUtils.Clear();
+
+            AddScript(AlertUtils.Success("插件重新加载成功", "插件重新加载成功，系统需要重载页面", "重新载入", "window.top.location.reload();"));
+        }
+
+        private void RptRunnable_ItemDataBound(object sender, RepeaterItemEventArgs e)
         {
             if (e.Item.ItemType != ListItemType.AlternatingItem && e.Item.ItemType != ListItemType.Item) return;
 
-            var pluginPair = (PluginPair)e.Item.DataItem;
+            var pluginInfo = (PluginInfo)e.Item.DataItem;
 
+            var ltlLogo = (Literal)e.Item.FindControl("ltlLogo");
             var ltlPluginId = (Literal)e.Item.FindControl("ltlPluginId");
             var ltlPluginName = (Literal)e.Item.FindControl("ltlPluginName");
+            var ltlVersion = (Literal)e.Item.FindControl("ltlVersion");
+            var ltlOwners = (Literal)e.Item.FindControl("ltlOwners");
             var ltlDescription = (Literal)e.Item.FindControl("ltlDescription");
             var ltlInitTime = (Literal)e.Item.FindControl("ltlInitTime");
             var ltlCmd = (Literal)e.Item.FindControl("ltlCmd");
 
-            ltlPluginId.Text = pluginPair.Metadata.Id;
-            ltlPluginName.Text = $@"<img src={PageUtils.GetPluginDirectoryUrl(pluginPair.Metadata.Id, pluginPair.Metadata.Icon)} width=""48"" height=""48"" /> {pluginPair.Metadata.DisplayName}";
-            ltlDescription.Text = $@"{pluginPair.Metadata.Description}<br />
-Version： {pluginPair.Metadata.Version}
-<span class=""gray"">&nbsp;|&nbsp;</span>
-作者： <a href="""" target=""_blank"">{pluginPair.Metadata.Publisher}</a>
-";
-
-            if (pluginPair.Metadata.InitTime > 1000)
+            ltlLogo.Text = $@"<img src=""{PluginManager.GetPluginIconUrl(pluginInfo.Service)}"" width=""48"" height=""48"" />";
+            ltlPluginId.Text = $@"<a href=""{PageView.GetRedirectUrl(pluginInfo.Id, GetRedirectUrl())}"">{pluginInfo.Id}</a>";
+            ltlPluginName.Text = pluginInfo.Plugin.Title;
+            ltlVersion.Text = pluginInfo.Plugin.Version;
+            if (pluginInfo.Plugin.Owners != null)
             {
-                ltlInitTime.Text = Math.Round((double)pluginPair.Metadata.InitTime / 1000) + "秒";
+                ltlOwners.Text = string.Join("&nbsp;", pluginInfo.Plugin.Owners);
+            }
+            
+            ltlDescription.Text = pluginInfo.Plugin.Description;
+
+            if (pluginInfo.InitTime > 1000)
+            {
+                ltlInitTime.Text = Math.Round((double)pluginInfo.InitTime / 1000) + "秒";
             }
             else
             {
-                ltlInitTime.Text = pluginPair.Metadata.InitTime + "毫秒";
+                ltlInitTime.Text = pluginInfo.InitTime + "毫秒";
             }
 
             var ableUrl = PageUtils.GetPluginsUrl(nameof(PageManagement), new NameValueCollection
             {
-                {pluginPair.Metadata.Disabled ? "enable" : "disable", true.ToString()},
-                {"pluginId", pluginPair.Metadata.Id}
+                {pluginInfo.IsDisabled ? "enable" : "disable", true.ToString()},
+                {"pluginId", pluginInfo.Id}
             });
 
             var deleteUrl = PageUtils.GetPluginsUrl(nameof(PageManagement), new NameValueCollection
             {
                 {"delete", true.ToString()},
-                {"pluginId", pluginPair.Metadata.Id}
+                {"pluginId", pluginInfo.Id}
             });
 
-            var ableText = pluginPair.Metadata.Disabled ? "启用" : "禁用";
+            var ableText = pluginInfo.IsDisabled ? "启用" : "禁用";
             ltlCmd.Text = $@"
-<a href=""{PageConfig.GetRedirectUrl(pluginPair.Metadata.Id)}"">设置</a>
+<a href=""javascript:;"" onClick=""{ModalTaxis.GetOpenWindowString()}"">排序</a>
 &nbsp;&nbsp;
-<a href=""javascript:;"" onClick=""{AlertUtils.ConfirmRedirect($"{ableText}插件", $"此操作将会{ableText}“{pluginPair.Metadata.Id}”插件，确认吗？", ableText, ableUrl)}"">
+<a href=""javascript:;"" onClick=""{AlertUtils.ConfirmRedirect($"{ableText}插件", $"此操作将会{ableText}“{pluginInfo.Id}”插件，确认吗？", ableText, ableUrl)}"">
 {ableText}
 </a>
 &nbsp;&nbsp;
-<a href=""javascript:;"" onClick=""{AlertUtils.ConfirmDelete("删除插件", $"此操作将会删除“{pluginPair.Metadata.Id}”插件，确认吗？", deleteUrl)}"">删除</a>";
+<a href=""javascript:;"" onClick=""{AlertUtils.ConfirmDelete("删除插件", $"此操作将会删除“{pluginInfo.Id}”插件，确认吗？", deleteUrl)}"">删除插件</a>";
+        }
+
+        private void RptError_ItemDataBound(object sender, RepeaterItemEventArgs e)
+        {
+            if (e.Item.ItemType != ListItemType.AlternatingItem && e.Item.ItemType != ListItemType.Item) return;
+
+            var pluginInfo = (PluginInfo)e.Item.DataItem;
+
+            var ltlPluginId = (Literal)e.Item.FindControl("ltlPluginId");
+            var ltlErrorMessage = (Literal)e.Item.FindControl("ltlErrorMessage");
+            var ltlCmd = (Literal)e.Item.FindControl("ltlCmd");
+
+            ltlPluginId.Text = pluginInfo.Id;
+            ltlErrorMessage.Text = pluginInfo.ErrorMessage;
+
+            var deleteUrl = PageUtils.GetPluginsUrl(nameof(PageManagement), new NameValueCollection
+            {
+                {"delete", true.ToString()},
+                {"pluginId", pluginInfo.Id}
+            });
+
+            ltlCmd.Text = $@"
+<a href=""javascript:;"" onClick=""{AlertUtils.ConfirmDelete("删除插件", $"此操作将会删除“{pluginInfo.Id}”插件，确认吗？", deleteUrl)}"">删除插件</a>";
         }
     }
 }

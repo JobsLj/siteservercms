@@ -4,10 +4,9 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
 using System.Web.UI.WebControls;
-using BaiRong.Core;
+using SiteServer.Utils;
 using SiteServer.BackgroundPages.Cms;
 using SiteServer.CMS.Core;
-using SiteServer.CMS.ImportExport;
 using SiteServer.CMS.Model;
 
 namespace SiteServer.BackgroundPages.Settings
@@ -66,7 +65,7 @@ namespace SiteServer.BackgroundPages.Settings
 
             if (Page.IsPostBack) return;
 
-            VerifyAdministratorPermissions(AppManager.Permissions.Settings.Site);
+            VerifyAdministratorPermissions(ConfigManager.Permissions.Settings.Site);
 
             _sortedlist = SiteTemplateManager.Instance.GetSiteTemplateSortedList();
             var directoryList = new List<DirectoryInfo>();
@@ -145,8 +144,7 @@ namespace SiteServer.BackgroundPages.Settings
             if (FileUtils.IsFileExists(filePath))
             {
                 ltlDownloadUrl.Text +=
-                    $@"<a href=""javascript:;"" onclick=""{ModalProgressBar.GetOpenWindowStringWithSiteTemplateZip(
-                        dirInfo.Name)}"">重新压缩</a>&nbsp;&nbsp;";
+                    $@"<a href=""javascript:;"" onclick=""{ModalProgressBar.GetOpenWindowStringWithSiteTemplateZip(0, dirInfo.Name)}"">重新压缩</a>&nbsp;&nbsp;";
 
                 ltlDownloadUrl.Text +=
                     $@"<a href=""{PageUtils.GetSiteTemplatesUrl(fileName)}"" target=""_blank"">下载压缩包</a>";
@@ -154,11 +152,10 @@ namespace SiteServer.BackgroundPages.Settings
             else
             {
                 ltlDownloadUrl.Text +=
-                    $@"<a href=""javascript:;"" onclick=""{ModalProgressBar.GetOpenWindowStringWithSiteTemplateZip(
-                        dirInfo.Name)}"">压缩</a>";
+                    $@"<a href=""javascript:;"" onclick=""{ModalProgressBar.GetOpenWindowStringWithSiteTemplateZip(0, dirInfo.Name)}"">压缩</a>";
             }
 
-            var urlAdd = PageSiteAdd.GetRedirectUrl(dirInfo.Name);
+            var urlAdd = PageSiteAdd.GetRedirectUrl(dirInfo.Name, string.Empty);
             ltlCreateUrl.Text = $@"<a href=""{urlAdd}"">创建站点</a>";
 
             var urlDelete = PageUtils.GetSettingsUrl(nameof(PageSiteTemplate), new NameValueCollection
@@ -187,8 +184,7 @@ namespace SiteServer.BackgroundPages.Settings
             ltlCreationDate.Text = DateUtils.GetDateString(fileInfo.CreationTime);
 
             ltlDownloadUrl.Text +=
-                    $@"<a href=""javascript:;"" onclick=""{ModalProgressBar.GetOpenWindowStringWithSiteTemplateUnZip(
-                        fileInfo.Name)}"">解压</a>&nbsp;&nbsp;";
+                    $@"<a href=""javascript:;"" onclick=""{ModalProgressBar.GetOpenWindowStringWithSiteTemplateUnZip(0, fileInfo.Name)}"">解压</a>&nbsp;&nbsp;";
 
             ltlDownloadUrl.Text +=
                 $@"<a href=""{PageUtils.GetSiteTemplatesUrl(fileInfo.Name)}"" target=""_blank"">下载压缩包</a>";
